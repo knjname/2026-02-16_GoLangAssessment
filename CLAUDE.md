@@ -11,6 +11,7 @@ Go Todo API — DDD (Domain-Driven Design) アーキテクチャによるTodo RE
 - APIフレームワーク: Huma v2 (OpenAPI自動生成)
 - DB: PostgreSQL 16 (pgx/v5ドライバ)
 - マイグレーション: Goose v3
+- DI: kessoku (コード生成ベースのDIコンテナ)
 
 ## Common Commands
 
@@ -40,8 +41,8 @@ go test -race -count=1 -run TestCreateTodo ./internal/usecase/...
 # リント
 make lint              # golangci-lint実行
 
-# モック再生成
-make generate          # go generate (mockeryによるモック生成)
+# コード生成 (モック + DI)
+make generate          # go generate (mockery + kessoku)
 ```
 
 ## Architecture
@@ -54,6 +55,7 @@ make generate          # go generate (mockeryによるモック生成)
 - **`internal/handler/`** — HTTPハンドラ。Huma v2でOpenAPIスキーマ付きエンドポイント登録。ドメインエラーからHTTPステータスへの変換は`errors.go`
 
 支援層:
+- **`internal/di/`** — DI構成。kessokuによるコード生成で依存解決。`api.go`/`batch.go`が定義、`*_band.go`が生成コード。プロバイダ関数は`providers.go`
 - **`internal/middleware/`** — ロギング、パニックリカバリ、リクエストID
 - **`internal/config/`** — 環境変数読み込み (`PORT`, `DATABASE_URL`, `LOG_LEVEL`)
 - **`internal/server/`** — HTTPサーバー初期化とgraceful shutdown
