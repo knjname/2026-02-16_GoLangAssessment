@@ -35,10 +35,10 @@ migrate-down:
 
 # Docker
 docker-up:
-	docker compose up -d
+	docker compose -f devenv/compose.yml up -d
 
 docker-down:
-	docker compose down
+	docker compose -f devenv/compose.yml down
 
 # Clean
 clean:
