@@ -2,32 +2,15 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"log/slog"
 	"os"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/knjname/go-todo-api/internal/config"
-	"github.com/knjname/go-todo-api/internal/repository/postgres"
-	"github.com/knjname/go-todo-api/internal/usecase"
+	"github.com/knjname/go-todo-api/internal/di"
 	"github.com/pressly/goose/v3"
 	"github.com/spf13/cobra"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-
-	cfg, err := config.Load()
-	if err != nil {
-		logger.Error("failed to load config", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-
 	rootCmd := &cobra.Command{
 		Use:   "batch",
 		Short: "Todo API batch tool",
@@ -42,19 +25,21 @@ func main() {
 		Use:   "up",
 		Short: "Run all pending migrations",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			db, err := sql.Open("pgx", cfg.DatabaseURL)
+			ctx := context.Background()
+			components, err := di.InitializeBatch(ctx)
 			if err != nil {
-				return fmt.Errorf("open database: %w", err)
+				return fmt.Errorf("initialize: %w", err)
 			}
-			defer func() { _ = db.Close() }()
+			defer components.Pool.Close()
+			defer func() { _ = components.DB.Close() }()
 
 			if err := goose.SetDialect("postgres"); err != nil {
 				return fmt.Errorf("set dialect: %w", err)
 			}
-			if err := goose.Up(db, "migrations"); err != nil {
+			if err := goose.Up(components.DB, "migrations"); err != nil {
 				return fmt.Errorf("migrate up: %w", err)
 			}
-			logger.Info("migrations applied successfully")
+			components.Logger.Info("migrations applied successfully")
 			return nil
 		},
 	}
@@ -63,19 +48,21 @@ func main() {
 		Use:   "down",
 		Short: "Roll back the last migration",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			db, err := sql.Open("pgx", cfg.DatabaseURL)
+			ctx := context.Background()
+			components, err := di.InitializeBatch(ctx)
 			if err != nil {
-				return fmt.Errorf("open database: %w", err)
+				return fmt.Errorf("initialize: %w", err)
 			}
-			defer func() { _ = db.Close() }()
+			defer components.Pool.Close()
+			defer func() { _ = components.DB.Close() }()
 
 			if err := goose.SetDialect("postgres"); err != nil {
 				return fmt.Errorf("set dialect: %w", err)
 			}
-			if err := goose.Down(db, "migrations"); err != nil {
+			if err := goose.Down(components.DB, "migrations"); err != nil {
 				return fmt.Errorf("migrate down: %w", err)
 			}
-			logger.Info("migration rolled back successfully")
+			components.Logger.Info("migration rolled back successfully")
 			return nil
 		},
 	}
@@ -87,16 +74,14 @@ func main() {
 		Short: "List all todos",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			ctx := context.Background()
-			pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+			components, err := di.InitializeBatch(ctx)
 			if err != nil {
-				return fmt.Errorf("connect to database: %w", err)
+				return fmt.Errorf("initialize: %w", err)
 			}
-			defer pool.Close()
+			defer components.Pool.Close()
+			defer func() { _ = components.DB.Close() }()
 
-			repo := postgres.NewTodoRepository(pool)
-			uc := usecase.NewTodoUseCase(repo, logger)
-
-			todos, err := uc.ListTodos(ctx)
+			todos, err := components.UseCase.ListTodos(ctx)
 			if err != nil {
 				return fmt.Errorf("list todos: %w", err)
 			}
@@ -122,16 +107,14 @@ func main() {
 		Short: "Mark all todos as complete",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			ctx := context.Background()
-			pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+			components, err := di.InitializeBatch(ctx)
 			if err != nil {
-				return fmt.Errorf("connect to database: %w", err)
+				return fmt.Errorf("initialize: %w", err)
 			}
-			defer pool.Close()
+			defer components.Pool.Close()
+			defer func() { _ = components.DB.Close() }()
 
-			repo := postgres.NewTodoRepository(pool)
-			uc := usecase.NewTodoUseCase(repo, logger)
-
-			count, err := uc.CompleteAllTodos(ctx)
+			count, err := components.UseCase.CompleteAllTodos(ctx)
 			if err != nil {
 				return fmt.Errorf("complete all: %w", err)
 			}
